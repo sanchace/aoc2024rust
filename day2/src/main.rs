@@ -6,37 +6,48 @@ fn main() {
 
     let mut count = 0;
     for report in contents.trim().lines() {
-        if test(report.split_whitespace().map(|x| x.parse::<u32>().expect("Should be number")).collect()) {
+        if test(report.split_whitespace().map(|x| x.parse::<u32>().expect("Should be number")).collect(), true) {
             count += 1;
         }
     }
     println!("{count}");
 }
 
-fn test(report: Vec<u32>) -> bool {
-    let mut report = report.clone();
-    let mut prev = match report.pop() {
+fn test(report: Vec<u32>, flag: bool) -> bool {
+    let mut copy = report.clone();
+    let mut prev = match copy.pop() {
         Some(x) => x,
         None => {return false;},
     };
-    let mut pop: u32 = match report.pop() {
+    let mut pop: u32 = match copy.pop() {
         Some(x) => x,
         None => {return true;},
     };
     if prev == pop {
-        return false;
+        return flag && test_all(report);
     }
-    let test = if prev < pop {
+    let test_p = if prev < pop {
         |a: u32, b: u32| a < b && b - a <= 3
     } else {
         |a, b| a > b && a - b <= 3
     };
     loop {
-        if !test(prev, pop) {return false;}
+        if !test_p(prev, pop) {
+            return flag && test_all(report);
+        }
         prev = pop;
-        pop = match report.pop() {
+        pop = match copy.pop() {
             Some(x) => x,
             None => {return true;},
         };
     }
+}
+
+fn test_all(report: Vec<u32>) -> bool {
+    for (idx, _) in report.clone().into_iter().enumerate() {
+        let mut report = report.clone();
+        report.remove(idx);
+        if test(report, false) {return true;}
+    }
+    false
 }
