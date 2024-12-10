@@ -7,40 +7,64 @@ use std::{
 
 const INPUT_PATH: &str = "/home/sanchace/projects/aoc/2024/day6/data/input";
 
+type Point = (usize, usize);
+
 enum Feedback {
     Direction(char),
-    Location((usize, usize)),
+    Location(Point),
+    Out,
 }
 
 fn main() {
-    let grid = read_input(Path::new(INPUT_PATH));
-    println!("{}", compute_path_size(&mut grid.clone(), find_pt(&grid, '^')));
+    let (mut walls, (max_row, max_col), init) = read_input_alt(Path::new(INPUT_PATH));
+    let mut count: u32 = 0;
+    for row in 0..max_row {
+        for col in 0..max_col {
+            if !walls.contains(&(row, col)) {
+                walls.insert((row, col));
+                if compute_path_size_alt(&mut walls, (max_row, max_col), init) == 0 {
+                    count += 1;
+                }
+                walls.remove(&(row, col));
+            }
+        }
+    }
+    println!("{count}");
 }
 
-fn update(grid: &mut [Vec<char>], current_coords: (char, (usize, usize))) -> Option<Feedback> {
-    let direction = grid[current_coords.1.0][current_coords.1.1];
-    let new_location: (usize, usize);
+fn update_alt(walls: &mut HashSet<Point>, bounds: Point, current_location: Point, current_direction: char, visited: &mut HashSet<(Point, char)>) -> Option<Feedback> {
+    if visited.contains(&(current_location, current_direction)) {return None;}
+    visited.insert((current_location, current_direction));
+    let new_location: Point;
     let new_direction: char;
     {
-        let mut temp_new_location = current_coords.1;
-        match direction {
+        let mut temp_new_location = current_location;
+        match current_direction {
             '^' => {
-                if temp_new_location.0 == 0 {return None;}
+                if temp_new_location.0 == 0 {
+                    return Some(Feedback::Out);
+                }
                 temp_new_location = (temp_new_location.0 - 1, temp_new_location.1);
                 new_direction = '>';
             },
             '>' => {
-                if temp_new_location.1 + 1 == grid[temp_new_location.0].len() {return None;}
+                if temp_new_location.1 + 1 == bounds.1 {
+                    return Some(Feedback::Out);
+                }
                 temp_new_location = (temp_new_location.0, temp_new_location.1 + 1);
                 new_direction = 'v';
             },
             'v' => {
-                if temp_new_location.0 + 1 == grid.len() {return None;}
+                if temp_new_location.0 + 1 == bounds.0 {
+                    return Some(Feedback::Out);
+                }
                 temp_new_location = (temp_new_location.0 + 1, temp_new_location.1);
                 new_direction = '<';
             },
             '<' => {
-                if temp_new_location.1 == 0 {return None;}
+                if temp_new_location.1 == 0 {
+                    return Some(Feedback::Out);
+                }
                 temp_new_location = (temp_new_location.0, temp_new_location.1 - 1);
                 new_direction = '^';
             },
@@ -48,45 +72,32 @@ fn update(grid: &mut [Vec<char>], current_coords: (char, (usize, usize))) -> Opt
         }
         new_location = temp_new_location;
     }
-    if grid[new_location.0][new_location.1] == '#' {
-        grid[current_coords.1.0][current_coords.1.1] = new_direction;
+    if walls.contains(&new_location) {
         return Some(Feedback::Direction(new_direction));
     }
-    grid[current_coords.1.0][current_coords.1.1] = 'X';
-    grid[new_location.0][new_location.1] = direction;
     Some(Feedback::Location(new_location))
 }
-
-fn compute_path_size(grid: &mut [Vec<char>], initial_position: (usize, usize)) -> usize {
-    let mut current_position = ('^', initial_position);
-    let mut guard_positions: HashSet<(usize, usize)> = HashSet::new();
-    guard_positions.insert(current_position.1);
-    while let Some(feedback) = update(grid, current_position) {
+fn compute_path_size_alt(walls: &mut HashSet<Point>, bounds: Point, initial_position: Point) -> usize {
+    let mut current_position = (initial_position, '^');
+    let mut guard_positions: HashSet<Point> = HashSet::new();
+    guard_positions.insert(current_position.0);
+    let mut visited: HashSet<(Point, char)> = HashSet::new();
+    while let Some(feedback) = update_alt(walls, bounds, current_position.0, current_position.1, &mut visited) {
         match feedback {
             Feedback::Direction(ch) => {
-                current_position = (ch, current_position.1);
+                current_position = (current_position.0, ch);
             },
             Feedback::Location(loc) => {
                 guard_positions.insert(loc);
-                current_position = (current_position.0, loc);
+                current_position = (loc, current_position.1);
             },
+            Feedback::Out => {return guard_positions.len();}
         }
     }
-    guard_positions.len()
+    0
 }
 
-fn find_pt(grid: &[Vec<char>], direction: char) -> (usize, usize) {
-    for (y, row) in grid.iter().enumerate() {
-        for (x, col) in row.iter().enumerate() {
-            if *col == direction {
-                return (y, x);
-            }
-        }
-    }
-    panic!("Did not find \'{direction}\' in grid!");
-}
-
-fn read_input(path: &Path) -> Vec<Vec<char>> {
+fn read_input_alt(path: &Path) -> (HashSet<Point>, Point, Point) {
     let mut input = String::new();
     let mut file = match File::open(path) {
         Err(why) => panic!("couldn't open {}: {}", path.display(), why),
@@ -95,9 +106,25 @@ fn read_input(path: &Path) -> Vec<Vec<char>> {
     if let Err(why) = file.read_to_string(&mut input) {
         panic!("couldn't read {}: {}", path.display(), why);
     }
-    input
+    let grid = input
         .trim()
         .lines()
-        .map(|line| line.chars().collect::<Vec<char>>())
-        .collect::<Vec<Vec<char>>>()
+        .map(|line| line.chars());
+    let mut row: usize = 0;
+    let mut col: usize = 0;
+    let mut init: Point = (0, 0);
+    let mut walls = HashSet::new();
+    for line in grid {
+        col = 0;
+        for ch in line {
+            match ch {
+                '#' => {walls.insert((row, col));},
+                '^' => {init = (row, col);},
+                _ => (),
+            }
+            col += 1;
+        }
+        row += 1;
+    }
+    (walls, (row, col), init)
 }
