@@ -16,23 +16,23 @@ enum Feedback {
 }
 
 fn main() {
-    let (mut walls, (max_row, max_col), init) = read_input_alt(Path::new(INPUT_PATH));
+    let (mut walls, (max_row, max_col), init) = read_input(Path::new(INPUT_PATH));
+    let path =  compute_path(&mut walls, (max_row, max_col), init);
+    //println!("{}", path.len());
     let mut count: u32 = 0;
-    for row in 0..max_row {
-        for col in 0..max_col {
-            if !walls.contains(&(row, col)) {
-                walls.insert((row, col));
-                if compute_path_size_alt(&mut walls, (max_row, max_col), init) == 0 {
-                    count += 1;
-                }
-                walls.remove(&(row, col));
+    for (row, col) in path {
+        if !walls.contains(&(row, col)) {
+            walls.insert((row, col));
+            if compute_path(&mut walls, (max_row, max_col), init).is_empty() {
+                count += 1;
             }
+            walls.remove(&(row, col));
         }
     }
     println!("{count}");
 }
 
-fn update_alt(walls: &mut HashSet<Point>, bounds: Point, current_location: Point, current_direction: char, visited: &mut HashSet<(Point, char)>) -> Option<Feedback> {
+fn update(walls: &mut HashSet<Point>, bounds: Point, current_location: Point, current_direction: char, visited: &mut HashSet<(Point, char)>) -> Option<Feedback> {
     if visited.contains(&(current_location, current_direction)) {return None;}
     visited.insert((current_location, current_direction));
     let new_location: Point;
@@ -77,12 +77,12 @@ fn update_alt(walls: &mut HashSet<Point>, bounds: Point, current_location: Point
     }
     Some(Feedback::Location(new_location))
 }
-fn compute_path_size_alt(walls: &mut HashSet<Point>, bounds: Point, initial_position: Point) -> usize {
+fn compute_path(walls: &mut HashSet<Point>, bounds: Point, initial_position: Point) -> HashSet<Point> {
     let mut current_position = (initial_position, '^');
     let mut guard_positions: HashSet<Point> = HashSet::new();
     guard_positions.insert(current_position.0);
     let mut visited: HashSet<(Point, char)> = HashSet::new();
-    while let Some(feedback) = update_alt(walls, bounds, current_position.0, current_position.1, &mut visited) {
+    while let Some(feedback) = update(walls, bounds, current_position.0, current_position.1, &mut visited) {
         match feedback {
             Feedback::Direction(ch) => {
                 current_position = (current_position.0, ch);
@@ -91,13 +91,13 @@ fn compute_path_size_alt(walls: &mut HashSet<Point>, bounds: Point, initial_posi
                 guard_positions.insert(loc);
                 current_position = (loc, current_position.1);
             },
-            Feedback::Out => {return guard_positions.len();}
+            Feedback::Out => {return guard_positions;}
         }
     }
-    0
+    HashSet::<Point>::new()
 }
 
-fn read_input_alt(path: &Path) -> (HashSet<Point>, Point, Point) {
+fn read_input(path: &Path) -> (HashSet<Point>, Point, Point) {
     let mut input = String::new();
     let mut file = match File::open(path) {
         Err(why) => panic!("couldn't open {}: {}", path.display(), why),
